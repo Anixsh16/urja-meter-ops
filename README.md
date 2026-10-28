@@ -113,9 +113,12 @@ npm ci
 npm run build
 npx playwright install chromium
 npm run test:e2e
+npm run format:check
 ```
 
 On Linux, `npx playwright install --with-deps chromium` also installs browser system dependencies. Browser tests automatically start a local API with explicitly synthetic records. No portal credentials or network portal calls are required for automated tests. Results cover desktop and mobile lookup, pagination, filters, hierarchy, zero/missing readings, empty windows, failure recovery, token rejection, and sign-out. Screenshots are written to ignored `artifacts/`. CI also builds the production container.
+
+For an explicit live check against the running production service, set `URJA_DEMO_TOKEN` privately and run `node scripts/verify-live.mjs` from `web/`. `URJA_BASE_URL` defaults to `http://127.0.0.1:8000` and can target the hosted demo. This check reads the real portal through our API and records desktop/mobile screenshots and a small evidence summary in ignored `artifacts/`; it never prints the token.
 
 ## Docker and hosting
 

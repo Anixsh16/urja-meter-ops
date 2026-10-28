@@ -6,24 +6,257 @@ import { ErrorState, Freshness, Loading, Status, Warnings } from './components';
 
 const EnergyChart = lazy(() => import('./charts'));
 
-export default function MeterDetail({ id, token, onBack }: { id: string; token: string; onBack: () => void }) {
-  const [window, setWindow] = useState({ from: '', to: '' });
-  const [draft, setDraft] = useState(window);
-  const detail = useQuery({ queryKey: ['meter', token, id], queryFn: ({ signal }) => get<Meter>(`/meters/${encodeURIComponent(id)}`, token, signal) });
-  const energy = useQuery({ queryKey: ['energy', token, id, window], queryFn: ({ signal }) => get<Consumption>(`/meters/${encodeURIComponent(id)}/consumption?${queryString(window)}`, token, signal) });
+export default function MeterDetail({
+  id,
+  token,
+  onBack,
+}: {
+  id: string;
+  token: string;
+  onBack: () => void;
+}) {
+  const [range, setRange] = useState({ from: '', to: '' });
+  const [draft, setDraft] = useState(range);
+  const detail = useQuery({
+    queryKey: ['meter', token, id],
+    queryFn: ({ signal }) => get<Meter>(`/meters/${encodeURIComponent(id)}`, token, signal),
+  });
+  const energy = useQuery({
+    queryKey: ['energy', token, id, range],
+    queryFn: ({ signal }) =>
+      get<Consumption>(
+        `/meters/${encodeURIComponent(id)}/consumption?${queryString(range)}`,
+        token,
+        signal,
+      ),
+  });
   if (detail.isPending) return <Loading />;
   if (detail.error) return <ErrorState error={detail.error} retry={() => void detail.refetch()} />;
   const meter = detail.data.data;
   const readings = energy.data?.data.readings ?? [];
   const latest = readings.at(-1);
-  return <>
-    <button className="back-button" onClick={onBack}><ArrowLeft size={16} />All meters</button>
-    <div className="page-heading"><div><div className="eyebrow">METER PROFILE</div><h1>{meter.id}<span className="heading-status"><Status value={meter.status} /></span></h1><p>{meter.manufacturer ?? 'Unknown manufacturer'} <span className="dot-separator">·</span> Serial {meter.serial_number ?? 'unavailable'} <span className="dot-separator">·</span> {meter.phase ?? 'Unknown'} phase</p></div><Freshness meta={detail.data.meta} /></div>
-    <div className="breadcrumb" aria-label="Meter network path">{meter.hierarchy.map((segment, i) => <span key={segment.level}>{i ? <span className="crumb-arrow">/</span> : null}<span title={segment.name ?? ''}>{segment.code ?? `Unknown ${segment.level}`}</span></span>)}</div>
-    <div className="metric-grid detail-metrics"><div className="metric-card"><span className="metric-label"><Zap size={16} />ACTIVE ENERGY REGISTER</span><strong>{number(latest?.kwh)}<small>kWh</small></strong><span className="metric-foot">Latest available cumulative reading</span></div><div className="metric-card"><span className="metric-label"><Radio size={16} />R-PHASE VOLTAGE</span><strong>{number(latest?.voltage_r)}<small>V</small></strong><span className="metric-foot">At the latest available timestamp</span></div><div className="metric-card"><span className="metric-label"><CalendarDays size={16} />READING WINDOW</span><strong>{readings.length}<small>readings</small></strong><span className="metric-foot">{latest?.source_timestamp ?? 'No available timestamp'}</span></div></div>
-    <div className="detail-grid"><section className="panel consumption-panel"><div className="panel-heading"><div><div className="eyebrow">REGISTER HISTORY</div><h2>Energy over time</h2></div><span className="unit-tag">kWh · cumulative</span></div><form className="date-form" onSubmit={e => { e.preventDefault(); setWindow(draft); }}><label>From<input aria-label="From date" type="date" value={draft.from} onChange={e => setDraft({ ...draft, from: e.target.value })} /></label><label>To<input aria-label="To date" type="date" value={draft.to} min={draft.from || undefined} onChange={e => setDraft({ ...draft, to: e.target.value })} /></label><button className="button secondary" type="submit">Apply dates</button>{window.from || window.to ? <button className="text-button" type="button" onClick={() => { setDraft({ from: '', to: '' }); setWindow({ from: '', to: '' }); }}>Reset</button> : null}</form>
-      {energy.isPending ? <Loading label="Loading register readings…" /> : energy.error ? <ErrorState error={energy.error} retry={() => void energy.refetch()} /> : !readings.length ? <div className="empty"><CalendarDays size={28} /><h3>No readings in this window</h3><p>Try another date range or reset to the portal’s default window.</p></div> : <><Suspense fallback={<Loading label="Preparing chart…" />}><EnergyChart readings={readings} timezone={energy.data.data.timezone} /></Suspense><p className="chart-note">Cumulative meter register, not interval consumption. Dates shown in {energy.data.data.timezone} (configured assumption). Missing values remain gaps.</p><details className="readings-table"><summary>Inspect {readings.length} source readings</summary><div className="table-scroll"><table><thead><tr><th>Source timestamp</th><th>kWh</th><th>kVAh</th><th>V(R)</th></tr></thead><tbody>{readings.map((r, i) => <tr key={`${r.timestamp}-${i}`}><td>{r.source_timestamp}</td><td>{r.kwh ?? '—'}</td><td>{r.kvah ?? '—'}</td><td>{r.voltage_r ?? '—'}</td></tr>)}</tbody></table></div></details></>}
-      {energy.data ? <div className="chart-footer"><Freshness meta={energy.data.meta} /><Warnings warnings={energy.data.meta.warnings} /></div> : null}
-    </section><aside className="profile-aside"><section className="panel"><div className="panel-heading"><h2>Nameplate</h2><span className="mini-label">SOURCE RECORD</span></div><dl className="nameplate">{[['Meter ID', meter.id], ['Serial number', meter.serial_number], ['Manufacturer', meter.manufacturer], ['Phase', meter.phase], ['Installation', meter.installation_type], ['Transformer', meter.transformer_code], ['Portal format', meter.portal_build]].map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value ?? '—'}</dd></div>)}</dl></section><section className="panel location-panel"><MapPin size={22} /><h2>Field location</h2>{meter.location ? <><p className="coordinates">{meter.location.latitude.toFixed(5)}° latitude<br />{meter.location.longitude.toFixed(5)}° longitude</p><a className="text-button" href={`https://www.openstreetmap.org/?mlat=${meter.location.latitude}&mlon=${meter.location.longitude}#map=16/${meter.location.latitude}/${meter.location.longitude}`} target="_blank" rel="noreferrer">Open in map<ArrowUpRight size={15} /></a></> : <p>No valid coordinates supplied by the portal.</p>}</section><Warnings warnings={[...meter.warnings, ...detail.data.meta.warnings]} /></aside></div>
-  </>;
+  return (
+    <>
+      <button className="back-button" onClick={onBack}>
+        <ArrowLeft size={16} />
+        All meters
+      </button>
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">METER PROFILE</div>
+          <h1>
+            {meter.id}
+            <span className="heading-status">
+              <Status value={meter.status} />
+            </span>
+          </h1>
+          <p>
+            {meter.manufacturer ?? 'Unknown manufacturer'} <span className="dot-separator">·</span>{' '}
+            Serial {meter.serial_number ?? 'unavailable'} <span className="dot-separator">·</span>{' '}
+            {meter.phase ?? 'Unknown'} phase
+          </p>
+        </div>
+        <Freshness meta={detail.data.meta} />
+      </div>
+      <div className="breadcrumb" aria-label="Meter network path">
+        {meter.hierarchy.map((segment, i) => (
+          <span key={segment.level}>
+            {i ? <span className="crumb-arrow">/</span> : null}
+            <span title={segment.name ?? ''}>{segment.code ?? `Unknown ${segment.level}`}</span>
+          </span>
+        ))}
+      </div>
+      <div className="metric-grid detail-metrics">
+        <div className="metric-card">
+          <span className="metric-label">
+            <Zap size={16} />
+            ACTIVE ENERGY REGISTER
+          </span>
+          <strong>
+            {number(latest?.kwh)}
+            <small>kWh</small>
+          </strong>
+          <span className="metric-foot">Latest available cumulative reading</span>
+        </div>
+        <div className="metric-card">
+          <span className="metric-label">
+            <Radio size={16} />
+            R-PHASE VOLTAGE
+          </span>
+          <strong>
+            {number(latest?.voltage_r)}
+            <small>V</small>
+          </strong>
+          <span className="metric-foot">At the latest available timestamp</span>
+        </div>
+        <div className="metric-card">
+          <span className="metric-label">
+            <CalendarDays size={16} />
+            READING WINDOW
+          </span>
+          <strong>
+            {readings.length}
+            <small>readings</small>
+          </strong>
+          <span className="metric-foot">
+            {latest?.source_timestamp ?? 'No available timestamp'}
+          </span>
+        </div>
+      </div>
+      <div className="detail-grid">
+        <section className="panel consumption-panel">
+          <div className="panel-heading">
+            <div>
+              <div className="eyebrow">REGISTER HISTORY</div>
+              <h2>Energy over time</h2>
+            </div>
+            <span className="unit-tag">kWh · cumulative</span>
+          </div>
+          <form
+            className="date-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setRange(draft);
+            }}
+          >
+            <label>
+              From
+              <input
+                aria-label="From date"
+                type="date"
+                value={draft.from}
+                onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+              />
+            </label>
+            <label>
+              To
+              <input
+                aria-label="To date"
+                type="date"
+                value={draft.to}
+                min={draft.from || undefined}
+                onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+              />
+            </label>
+            <button className="button secondary" type="submit">
+              Apply dates
+            </button>
+            {range.from || range.to ? (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => {
+                  setDraft({ from: '', to: '' });
+                  setRange({ from: '', to: '' });
+                }}
+              >
+                Reset
+              </button>
+            ) : null}
+          </form>
+          {energy.isPending ? (
+            <Loading label="Loading register readings…" />
+          ) : energy.error ? (
+            <ErrorState error={energy.error} retry={() => void energy.refetch()} />
+          ) : !readings.length ? (
+            <div className="empty">
+              <CalendarDays size={28} />
+              <h3>No readings in this window</h3>
+              <p>Try another date range or reset to the portal’s default window.</p>
+            </div>
+          ) : (
+            <>
+              <Suspense fallback={<Loading label="Preparing chart…" />}>
+                <EnergyChart readings={readings} timezone={energy.data.data.timezone} />
+              </Suspense>
+              <p className="chart-note">
+                Cumulative meter register, not interval consumption. Dates shown in{' '}
+                {energy.data.data.timezone} (configured assumption). Missing values remain gaps.
+              </p>
+              <details className="readings-table">
+                <summary>Inspect {readings.length} source readings</summary>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Source timestamp</th>
+                        <th>kWh</th>
+                        <th>kVAh</th>
+                        <th>V(R)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {readings.map((r, i) => (
+                        <tr key={`${r.timestamp}-${i}`}>
+                          <td>{r.source_timestamp}</td>
+                          <td>{r.kwh ?? '—'}</td>
+                          <td>{r.kvah ?? '—'}</td>
+                          <td>{r.voltage_r ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </>
+          )}
+          {energy.data ? (
+            <div className="chart-footer">
+              <Freshness meta={energy.data.meta} />
+              <Warnings warnings={energy.data.meta.warnings} />
+            </div>
+          ) : null}
+        </section>
+        <aside className="profile-aside">
+          <section className="panel">
+            <div className="panel-heading">
+              <h2>Nameplate</h2>
+              <span className="mini-label">SOURCE RECORD</span>
+            </div>
+            <dl className="nameplate">
+              {[
+                ['Meter ID', meter.id],
+                ['Serial number', meter.serial_number],
+                ['Manufacturer', meter.manufacturer],
+                ['Phase', meter.phase],
+                ['Installation', meter.installation_type],
+                ['Transformer', meter.transformer_code],
+                ['Portal format', meter.portal_build],
+              ].map(([key, value]) => (
+                <div key={key}>
+                  <dt>{key}</dt>
+                  <dd>{value ?? '—'}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <section className="panel location-panel">
+            <MapPin size={22} />
+            <h2>Field location</h2>
+            {meter.location ? (
+              <>
+                <p className="coordinates">
+                  {meter.location.latitude.toFixed(5)}° latitude
+                  <br />
+                  {meter.location.longitude.toFixed(5)}° longitude
+                </p>
+                <a
+                  className="text-button"
+                  href={`https://www.openstreetmap.org/?mlat=${meter.location.latitude}&mlon=${meter.location.longitude}#map=16/${meter.location.latitude}/${meter.location.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in map
+                  <ArrowUpRight size={15} />
+                </a>
+              </>
+            ) : (
+              <p>No valid coordinates supplied by the portal.</p>
+            )}
+          </section>
+          <Warnings warnings={[...meter.warnings, ...detail.data.meta.warnings]} />
+        </aside>
+      </div>
+    </>
+  );
 }

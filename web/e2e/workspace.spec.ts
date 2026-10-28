@@ -10,10 +10,14 @@ async function login(page: Page) {
 
 test('private access, meter lookup, register chart and sign-out', async ({ page }, info) => {
   const errors: string[] = [];
-  page.on('pageerror', e => errors.push(e.message));
+  page.on('pageerror', (e) => errors.push(e.message));
   await login(page);
   await expect(page.getByRole('button', { name: 'T001', exact: true })).toBeVisible();
-  await page.screenshot({ path: `../artifacts/${info.project.name}-directory.png`, fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: `../artifacts/${info.project.name}-directory.png`,
+    fullPage: true,
+  });
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
   await expect(page.getByRole('button', { name: 'T021', exact: true })).toBeVisible();
   await page.getByLabel('Search meters').fill('SN-001');
@@ -21,21 +25,33 @@ test('private access, meter lookup, register chart and sign-out', async ({ page 
   await expect(page.getByText('Showing 1–1 of 1 meters')).toBeVisible();
   await page.getByRole('button', { name: 'T001', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Energy over time' })).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Cumulative kWh register readings over time' })).toBeVisible();
+  await expect(
+    page.getByRole('img', { name: 'Cumulative kWh register readings over time' }),
+  ).toBeVisible();
   await page.getByText('Inspect 3 source readings').click();
   await expect(page.getByRole('cell', { name: '0', exact: true }).first()).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `../artifacts/${info.project.name}-profile.png`, fullPage: true });
   await page.getByLabel('From date').fill('2026-07-01');
   await page.getByLabel('To date').fill('2026-07-02');
   await page.getByRole('button', { name: 'Apply dates' }).click();
   await expect(page.getByRole('heading', { name: 'No readings in this window' })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign out', exact: true }).filter({ visible: true }).click();
+  await page
+    .getByRole('button', { name: 'Sign out', exact: true })
+    .filter({ visible: true })
+    .click();
   await expect(page.getByLabel('Demo access token')).toHaveValue('');
-  expect(await page.evaluate(() => Object.keys(localStorage).length + Object.keys(sessionStorage).length)).toBe(0);
+  expect(
+    await page.evaluate(
+      () => Object.keys(localStorage).length + Object.keys(sessionStorage).length,
+    ),
+  ).toBe(0);
   expect(errors).toEqual([]);
 });
 
-test('empty search, status filter, hierarchy traversal and network filter', async ({ page }, info) => {
+test('empty search, status filter, hierarchy traversal and network filter', async ({
+  page,
+}, info) => {
   await login(page);
   await page.getByLabel('Filter by status').selectOption('Faulty');
   await expect(page.getByRole('button', { name: 'T003', exact: true })).toBeVisible();
@@ -46,6 +62,7 @@ test('empty search, status filter, hierarchy traversal and network filter', asyn
   await page.getByRole('button', { name: 'Network explorer', exact: true }).click();
   await page.getByRole('button', { name: 'Expand Test zone', exact: true }).click();
   await expect(page.getByText('Test circle', { exact: true })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `../artifacts/${info.project.name}-network.png`, fullPage: true });
   await page.getByRole('button', { name: 'View meters in Test circle', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Test circle/ })).toBeVisible();
