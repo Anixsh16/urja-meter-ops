@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: urja-meter-ops
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /healthz
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PORTAL_URL
+        value: https://urja-ops.flockenergy.tech
+      - key: PORTAL_USERNAME
+        sync: false
+      - key: PORTAL_PASSWORD
+        sync: false
+      - key: DEMO_API_KEY
+        generateValue: true
+      - key: PORTAL_TIMEZONE
+        value: Asia/Kolkata
