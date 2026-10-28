@@ -2,6 +2,10 @@
 
 A read-only API and dashboard over the Urja Meter Ops portal. Search a meter, inspect its nameplate and cumulative energy readings, and follow its network path without using the legacy UI.
 
+[![Verify](https://github.com/Anixsh16/urja-meter-ops/actions/workflows/ci.yml/badge.svg)](https://github.com/Anixsh16/urja-meter-ops/actions/workflows/ci.yml)
+
+**Hosted demo:** [Meter workspace](https://urja-meter-ops-qy60.onrender.com) · [API documentation](https://urja-meter-ops-qy60.onrender.com/docs). A private demo token is required; it is intentionally absent from this public repository. Free hosting can take about a minute to wake after inactivity.
+
 The integration uses the portal's **normal signed export**, rather than scraping a detail page for every meter. An observed export contains 403 meters across legacy and v2 formats. Source inconsistencies are retained as warnings, not silently repaired.
 
 ## Start here

@@ -158,3 +158,18 @@ async def test_date_filter_is_inclusive_and_ignoring_upstream_cannot_bypass_it()
     assert (
         await service.consumption("T001", date(2026, 6, 29), date(2026, 6, 29))
     ).meta.cache == "hit"
+
+
+def test_reused_codes_cannot_create_hierarchy_cycles():
+    value = row()
+    for segment in value["hierarchy"].values():
+        segment["code"] = "SAME-CODE"
+    snapshot = build_snapshot([value])
+    assert len(snapshot.nodes) == 7
+    for node in snapshot.nodes.values():
+        visited = set()
+        current = node
+        while current is not None:
+            assert current.id not in visited
+            visited.add(current.id)
+            current = snapshot.nodes.get(current.parent_id)

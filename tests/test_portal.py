@@ -158,3 +158,27 @@ async def test_incomplete_export_fails_instead_of_silently_truncating():
         await client.catalog()
     assert error.value.code == "incomplete_export"
     await client.close()
+
+
+@pytest.mark.parametrize("expiry_path", ["keys", "export"])
+async def test_repeated_expiry_gets_one_reauthentication_for_whole_export(expiry_path):
+    logins = [0]
+
+    def handler(request):
+        if request.url.path == "/login":
+            logins[0] += 1
+            return login_response()
+        if request.url.path == "/portal/keys" and expiry_path == "export":
+            return httpx.Response(200, json={"data": {"signingSecret": "fixture"}})
+        return httpx.Response(
+            200,
+            text='<html>Sign in<input name="password"></html>',
+            headers={"content-type": "text/html"},
+        )
+
+    client = PortalClient(settings(), httpx.MockTransport(handler))
+    with pytest.raises(ServiceError) as error:
+        await client.catalog()
+    assert error.value.code == "upstream_auth"
+    assert logins[0] == 2  # Initial login plus exactly one recovery for the whole operation.
+    await client.close()

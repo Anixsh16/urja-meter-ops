@@ -27,6 +27,7 @@ class PortalClient:
         # including auth refresh, so cookie/token changes cannot race a signed export.
         self.lock = asyncio.Lock()
         self.authenticated = False
+        self.auth_generation = 0
         self.semaphore = asyncio.Semaphore(settings.upstream_concurrency)
 
     async def close(self):
@@ -82,6 +83,7 @@ class PortalClient:
                 "upstream_auth", "Portal authentication failed; check server configuration.", 503
             )
         self.authenticated = True
+        self.auth_generation += 1
 
     @staticmethod
     def _expired(response: httpx.Response) -> bool:
@@ -97,12 +99,12 @@ class PortalClient:
             )
         )
 
-    async def _json(self, path: str, **kwargs):
+    async def _json(self, path: str, allow_reauth=True, **kwargs):
         for attempt in range(2):
             response = await self._send("GET", path, **kwargs)
             if self._expired(response):
                 self.authenticated = False
-                if attempt == 0:
+                if attempt == 0 and allow_reauth:
                     await self._login()
                     # Signed calls must rebuild their signature with the new session.
                     if path.startswith("/portal/export"):
@@ -136,8 +138,11 @@ class PortalClient:
         async with self.semaphore, self.lock:
             if not self.authenticated:
                 await self._login()
+            generation = self.auth_generation
             for attempt in range(2):
-                keys = await self._json("/portal/keys")
+                keys = await self._json(
+                    "/portal/keys", allow_reauth=self.auth_generation == generation
+                )
                 try:
                     secret = keys["data"]["signingSecret"]
                     timestamp = str(int(time.time()))
@@ -151,6 +156,7 @@ class PortalClient:
                 try:
                     result = await self._json(
                         "/portal/export?" + query,
+                        allow_reauth=self.auth_generation == generation,
                         headers={"x-timestamp": timestamp, "x-signature": signature},
                     )
                 except ServiceError as exc:
